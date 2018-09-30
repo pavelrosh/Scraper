@@ -1,0 +1,9 @@
+Контакти можна отримати за допомогою Selenium.
+Алгоритм такий:
+
+driver = webdriver.Chrome("chromedriver.exe")
+driver.get("https://trud.ua/profile/card/id/1181821.html")
+button = driver.find_element_by_class_name("show-contacts")
+button.click()
+
+Далі поле з контактами відкрито й доступне для скрабінгу.

@@ -1,9 +1,8 @@
 from mongoengine import *
 
 
-# can add max_length
 class WorkExperience(EmbeddedDocument):
-    position = StringField(required=True)
+    position = StringField()
     start_date = DateTimeField()
     end_date = DateTimeField()
     company_description = StringField()

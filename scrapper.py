@@ -1,27 +1,25 @@
 import requests
 import re
-import time
 from bs4 import BeautifulSoup
 from mongoengine import *
 from datetime import datetime
 from model import *
-# from selenium import webdriver
 
 
-class Scrapper:
+class Scraper:
     def __init__(self, category):
         self.category = category
-        self.start_scrapping(category)
+        self.start_scrapping(category)  # starting scraping process
 
     @staticmethod
-    def get_page(url):
+    def get_page(url):  # method return BeatifulSoup object of input page
         page = requests.get(url)
         if page.status_code is not 200:
             print("Can't load page, code: {}".format(page.status_code))
             exit(1)
         return BeautifulSoup(page.content, 'html.parser')
 
-    def grab_links(self, url):
+    def grab_links(self, url):  # method return page url of each user
         link_list = []
         head = "https://trud.ua"
         page = self.get_page(url)
@@ -34,14 +32,13 @@ class Scrapper:
                 page = self.get_page(head + page.find('a', class_="next-p").get('href'))
             else:
                 break
-        print(len(link_list))
         return link_list
 
     @staticmethod
-    def match_exact_element(element, attr, attr_name):
+    def match_exact_element(element, attr, attr_name):  # method for find div which has more than one word in name
         return lambda tag: tag.name == element and tag.get(attr) == [attr_name]
 
-    def grab_user(self, url):
+    def grab_user(self, url):  # this method return user information and save it to database
         title = ""
         fullname = ""
         age = ""
@@ -68,7 +65,7 @@ class Scrapper:
         return self.grab_experience(page)
 
     @staticmethod
-    def grab_experience(page):
+    def grab_experience(page):  # return information about work experience of each user
         position = ""
         start_date = ""
         end_date = ""
@@ -91,7 +88,6 @@ class Scrapper:
                 date_str = item.find('div', class_="lbl-gray").get_text().strip()
                 date_str = re.findall(r'\d{2}.\d{4}', date_str)
                 start_date = datetime.strptime(date_str[0], "%m.%Y").date().isoformat()
-                # print(start_date)
                 if len(date_str) > 1:
                     end_date = datetime.strptime(date_str[1], "%m.%Y").date().isoformat()
                 else:
@@ -108,11 +104,11 @@ class Scrapper:
         return obj_list
 
     @staticmethod
-    def del_db():
+    def del_db():  # delete all information from db
         for u in User.objects:
             u.delete()
 
-    def start_scrapping(self, category):
+    def start_scrapping(self, category):  # this method implement whole process of collect and save data
         connect('Scrupper')
         self.del_db()
         url = "https://trud.ua/search.cv/results/jobcategory/{}.html".format(category)
@@ -122,7 +118,7 @@ class Scrapper:
             for link in link_list:
                 tmp = self.grab_user(link)
                 if len(tmp) > 0:
-                    u = User.objects.get(cv_url=link)
+                    u = User.objects(cv_url=link).order_by('-id').first()
                     for exp in tmp:
                         u.list_of_exp.append(exp)
                     u.save()
@@ -134,13 +130,4 @@ class Scrapper:
 
 
 if __name__ == '__main__':
-    start_time = time.time()
-    scrappy = Scrapper("sport")
-    # scrappy = Scrapper("proizvodstvo")
-    print("--- %s seconds ---" % (time.time() - start_time))
-    # scrappy.start_scrapping('')
-    # start_scrapping("sport")
-    # driver = webdriver.Chrome("D:\Download\chromedriver_win32/chromedriver.exe")
-    # driver.get("https://trud.ua/profile/card/id/1181821.html")
-    # button = driver.find_element_by_class_name("show-contacts")
-    # button.click()
+    scrappy = Scraper("proizvodstvo")  # you can put any category or '' for collecting data by all categories
