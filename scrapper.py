@@ -1,9 +1,10 @@
 import requests
 import re
+import pymongo
 from bs4 import BeautifulSoup
-from mongoengine import *
 from datetime import datetime
 from model import *
+import bson
 
 
 class Scraper:
@@ -58,11 +59,11 @@ class Scraper:
             salary = int(page.find(self.match_exact_element('div', 'class', 'salary'))
                          .get_text().replace("грн", "").strip())
             u = User(title=title, fullname=fullname, cv_url=url,
-                     age=age, updated_by_owner=ubo, salary_amount=salary).save()
+                     age=age, updated_by_owner=ubo, salary_amount=salary).to_mongo().to_dict()
         else:
             u = User(title=title, fullname=fullname, cv_url=url,
-                     age=age, updated_by_owner=ubo, salary_amount=0).save()
-        return self.grab_experience(page)
+                     age=age, updated_by_owner=ubo, salary_amount=0).to_mongo().to_dict()
+        return u, page
 
     @staticmethod
     def grab_experience(page):  # return information about work experience of each user
@@ -99,29 +100,22 @@ class Scraper:
                 job_description = item.find('div', class_="txt-inf").get_text().strip()
                 exp = WorkExperience(position=position, start_date=start_date,
                                      end_date=end_date, job_description=job_description,
-                                     company_description=company_description, company_name=company_name)
+                                     company_description=company_description,
+                                     company_name=company_name).to_mongo().to_dict()
                 obj_list.append(exp)
         return obj_list
 
-    @staticmethod
-    def del_db():  # delete all information from db
-        for u in User.objects:
-            u.delete()
-
     def start_scrapping(self, category):  # this method implement whole process of collect and save data
-        connect('Scrupper')
-        self.del_db()
         url = "https://trud.ua/search.cv/results/jobcategory/{}.html".format(category)
         link_list = self.grab_links(url)
         counter = 0
         if len(link_list) > 0:
             for link in link_list:
-                tmp = self.grab_user(link)
-                if len(tmp) > 0:
-                    u = User.objects(cv_url=link).order_by('-id').first()
-                    for exp in tmp:
-                        u.list_of_exp.append(exp)
-                    u.save()
+                u, page = self.grab_user(link)  # return user object, user page
+                exp_list = self.grab_experience(page)  # return list of user experience
+                u['list_of_exp'].extend(exp_list)
+                u = bson.son.SON(u)
+                users.insert_one(u)
                 counter += 1
                 print("User {} was saved".format(counter))
             print("Scrapping {} category is successfully finished.".format(self.category))
@@ -130,4 +124,11 @@ class Scraper:
 
 
 if __name__ == '__main__':
-    scrappy = Scraper("proizvodstvo")  # you can put any category or '' for collecting data by all categories
+    client = pymongo.MongoClient("mongodb://SCRAM:pavel17589_@scrap-shard-00-00-hkiyo.mongodb.net:27017,"
+                                 "scrap-shard-00-01-hkiyo.mongodb.net:27017,scrap-shard-00-02-hkiyo.mongodb.net:27017/"
+                                 "test?"
+                                 "ssl=true&replicaSet=Scrap-shard-0&authSource=admin&retryWrites=true")
+    db = client['Scrupper']
+    users = db["users"]
+    Scraper("proizvodstvo")  # you can put any category for collecting data
+
